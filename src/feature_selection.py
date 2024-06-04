@@ -12,7 +12,9 @@ def do_forward_selection_cv(X,
                             required_feature_ids=None,
                             early_stopping_tol=-1,
                             verbose=False,
-                            n_jobs=1):
+                            n_jobs=1,
+                            weights=None,
+                            N_ste=1):
     
     assert not np.any(np.isin(required_feature_ids, 
                             feature_ids_to_select)), ValueError("Required feature cannot be in the features to select")
@@ -81,6 +83,15 @@ def do_forward_selection_cv(X,
             feat_to_add_ind = np.nanargmin(all_test_scores[it, :, 0])
             best_it_score = np.nanmin(all_test_scores[it, :, 0])
 
+        if (weights is not None) and (it < n_features_to_select_from - 1):
+            feat_to_add_ind = select_N_standard_error_ind(all_test_scores[it, :, 0], 
+                                                            weights,
+                                                            larger_score_is_better,
+                                                            N=N_ste,
+                                                            feature_ids_to_select=feature_ids_to_select)
+            best_it_score = all_test_scores[it, feat_to_add_ind, 0]
+            print(it)
+
         selected_features_ids.append(feature_ids_to_select[feat_to_add_ind])
         selected_test_scores_stats.append(all_test_scores[it, feat_to_add_ind, :])
         
@@ -125,3 +136,23 @@ def score_comparison_func(s_old, s_new, larger_score_is_better, tol=0):
             return True
         
     return False
+
+def select_N_standard_error_ind(scores, weights, larger_score_is_better, feature_ids_to_select=None, N=1):
+    ste = N*(np.nanstd(scores)/np.sqrt(len(scores)))
+    if feature_ids_to_select is not None:
+        weights = weights[feature_ids_to_select]
+    #print(ste)
+    if larger_score_is_better: 
+        best_val = np.nanmax(scores)
+    else:
+        best_val = np.nanmin(scores)
+
+    possible_inds = np.where(abs(best_val - scores) < ste)[0]
+    if feature_ids_to_select is None:
+        print("STE=", ste, possible_inds, weights[possible_inds])
+    else:
+        print("STE=", ste, feature_ids_to_select[possible_inds], weights[possible_inds])
+
+    selected_ind = possible_inds[np.argmax(weights[possible_inds])]
+    
+    return selected_ind
